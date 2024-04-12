@@ -6,12 +6,26 @@
 import * as url from "url";
 import portableFetch from "portable-fetch";
 import { Configuration } from "./configuration";
-import { RESTDataSource } from "apollo-datasource-rest";
-// {$CustomDataSourcePlaceholder}
+{{^dataSourceImportString}}import { RESTDataSource } from "apollo-datasource-rest";{{/dataSourceImportString}}
+{{#dataSourceImportString}}import {{{dataSourceName}}} from "{{dataSourceImportString}}";{{/dataSourceImportString}}
+{{#withCircuitBreaker}}
+import { CircuitBreaker } from "opossum";
+{{/withCircuitBreaker}}
 
 type GenericObject<key, type> = {}
 
 const BASE_PATH = "{{{basePath}}}".replace(/\/+$/, "");
+
+{{#withCircuitBreaker}}
+const defaultCircuitBreakerOptions = {
+  usePrometheus: true,
+  timeout: 3000,
+  errorThresholdPercentage: 50,
+  resetTimeout: 30000,
+} as CircuitBreaker.Options
+
+export const circuitBreakers = Map<string, CircuitBreaker>();
+{{/withCircuitBreaker}}
 
 /**
  *
@@ -95,18 +109,29 @@ export class Controllers {
 
 {{#apiInfo}}{{#apis}}{{#operations}}
 
-export class {{classname}}Api extends RESTDataSource {
-    constructor(baseUrl?: string) {
+export class {{classname}}Api extends {{dataSourceName}} {
+    constructor(baseUrl?: string{{#withCircuitBreaker}}, circuitBreakerOptions?: CircuitBreaker.Options{{/withCircuitBreaker}}) {
         super();
         this.baseURL = baseUrl;
+        {{#withCircuitBreaker}}
+        {{#operation}}
+        const {{nickname}}CB = new CircuitBreaker(this.{{nickname}}, circuitBreakerOptions ?? defaultCircuitBreakerOptions)
+        circuitBreakers.set("{{nickname}}CB", {{nickname}}CB);
+        {{/operation}}
+        {{/withCircuitBreaker}}
     }
     paramCreator = {{classname}}FetchParamCreator()
     {{#operation}}
     {{nickname}}({{#allParams}}{{paramName}}{{^required}}?{{/required}}: {{{dataType}}}, {{/allParams}}): Promise<{{#returnType}}{{{returnType}}}{{/returnType}}{{^returnType}}Response{{/returnType}}> {
         const args = this.paramCreator.{{nickname}}({{#allParams}}{{paramName}}, {{/allParams}})
-
         // @ts-ignore
+        {{#withCircuitBreaker}}
+        const circuitBreaker = circuitBreakers.get("{{nickname}}CB")
+        return circuitBreaker.fire(this.fetch(Object.assign(args.options, { path: args.url })))
+        {{/withCircuitBreaker}}
+        {{^withCircuitBreaker}}
         return this.fetch(Object.assign(args.options, { path: args.url }))
+        {{/withCircuitBreaker}}
     }
     {{/operation}}
 }
