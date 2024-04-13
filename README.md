@@ -12,21 +12,26 @@ It's error-prone, slow and boring to create all those connectors manually. Most 
 
 ## Usage
 ```
-Usage: chimp-datasources-generator [options] 
-[command]
+Usage: chimp-datasources-generator create [options] <directory> <api-location>
 
-Commands:
-  create <directory> <api-location> [custom-data-source-import]  Create the datasources for api, pass either a URL or a yaml/json file. 
-   Use http/https when pointing to a URL and relative location when pointing to a file 
-     Examples: 
-       chimp-datasources-generator create ./generated/external-apis https://domain.com/v3/api-docs.yaml
-       chimp-datasources-generator create ./generated/external-apis ./api-docs.yaml
-   You can also specify your own custom data source import:
-  chimp-datasources-generator create ./generated/external-apis ./api-docs.yaml "@app/apis/DataSource#DataSource"   "@app/apis/DataSource#DataSource" will use an import of:
-       import { DataSource } from "@app/apis/DataSource"
-     For a default import just use the path:
-       "@app/apis/BaseDataSource"
+Generate RestDatasource from swagger specs.
+Examples: 
+   chimp-datasources-generator create ./generated/external-apis https://domain.com/v3/api-docs.yaml --withCircuitBreaker
+   chimp-datasources-generator create ./generated/external-apis ./api-docs.yaml
+   chimp-datasources-generator create ./generated/external-apis ./api-docs.yaml "@app/apis/DataSource#DataSource"
 
+Arguments:
+  directory                            Directory for the generated source files.
+  api-location                         Location/URL for the json/yaml swagger specs. Use http/https when pointing to a URL and relative location when pointing to a file.
+
+Options:
+  -ds, --dataSourceImport <string>     You can also specify your own custom data source import. 
+   "@app/apis/DataSource#DataSource" will use an import of:
+   import { DataSource } from "@app/apis/DataSource"
+  For a default import just use the path:
+   "@app/apis/BaseDataSource"
+  -cb, --withCircuitBreaker <boolean>  Add circuit breakers for api calls. (default: false)
+  -h, --help                           display help for command
 ```
 
 In your code create dataSources.ts file like this one:
