@@ -16,9 +16,10 @@ Usage: chimp-datasources-generator create [options] <directory> <api-location>
 
 Generate RestDatasource from swagger specs.
 Examples: 
-   chimp-datasources-generator create ./generated/external-apis https://domain.com/v3/api-docs.yaml --withCircuitBreaker
+   chimp-datasources-generator create ./generated/external-apis https://domain.com/v3/api-docs.yaml --withCircuitBreaker=true
    chimp-datasources-generator create ./generated/external-apis ./api-docs.yaml
-   chimp-datasources-generator create ./generated/external-apis ./api-docs.yaml "@app/apis/DataSource#DataSource"
+   chimp-datasources-generator create ./generated/external-apis ./api-docs.yaml -ds "@app/apis/DataSource#DataSource"
+   chimp-datasources-generator create ./generated/external-apis ./api-docs.yaml -ds "@app/apis/DataSource#DataSource --withCircuitBreaker=true"
 
 Arguments:
   directory                            Directory for the generated source files.
