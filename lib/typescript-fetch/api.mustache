@@ -7,24 +7,39 @@ import * as url from "url";
 import portableFetch from "portable-fetch";
 import { Configuration } from "./configuration";
 {{^dataSourceImportString}}import { RESTDataSource } from "apollo-datasource-rest";{{/dataSourceImportString}}
-{{#dataSourceImportString}}import {{{dataSourceName}}} from "{{dataSourceImportString}}";{{/dataSourceImportString}}
+{{#dataSourceImportString}}import { {{dataSourceName}} } from '{{dataSourceImportString}}';{{/dataSourceImportString}}
 {{#withCircuitBreaker}}
-import { CircuitBreaker } from "opossum";
+{{^circuitBreakerImportString}}import { circuitBreaker, handleWhen, SamplingBreaker } from 'cockatiel'{{/circuitBreakerImportString}}
+{{#circuitBreakerImportString}}import { {{circuitBreakerConfigFn}} } from '@app/circuit-breakers/CircuitBreakerConfig'{{/circuitBreakerImportString}}
 {{/withCircuitBreaker}}
 
 type GenericObject<key, type> = {}
 
 const BASE_PATH = "{{{basePath}}}".replace(/\/+$/, "");
-
+export let serviceCircuitBreaker;
 {{#withCircuitBreaker}}
-const defaultCircuitBreakerOptions = {
-  usePrometheus: true,
-  timeout: 3000,
-  errorThresholdPercentage: 50,
-  resetTimeout: 30000,
-} as CircuitBreaker.Options
+{{^circuitBreakerImportString}}
+export const initializeCircuitBreaker = () => {
+  const breakerPolicy = {
+    halfOpenAfter: 3000,
+    breaker: new SamplingBreaker({ threshold: 0.5, duration: 3 * 1000, minimumRps: 1 }),
+  }
+  serviceCircuitBreaker = circuitBreaker(handleWhen(err => err.extensions.code.startsWith("5")), breakerPolicy)
+}
+{{/circuitBreakerImportString}}
 
-export const circuitBreakers = Map<string, CircuitBreaker>();
+{{#circuitBreakerImportString}}
+export const initializeCircuitBreaker = () => {
+  serviceCircuitBreaker = {{circuitBreakerConfigFn}}('{{serviceName}}')
+}
+{{/circuitBreakerImportString}}
+initializeCircuitBreaker()
+
+export const resetCircuitBreaker = () => {
+  initializeCircuitBreaker()
+}
+
+export const circuitBreakers = new Map<string, circuitBreaker>();
 {{/withCircuitBreaker}}
 
 /**
@@ -110,24 +125,16 @@ export class Controllers {
 {{#apiInfo}}{{#apis}}{{#operations}}
 
 export class {{classname}}Api extends {{dataSourceName}} {
-    constructor(baseUrl?: string{{#withCircuitBreaker}}, circuitBreakerOptions?: CircuitBreaker.Options{{/withCircuitBreaker}}) {
+    constructor(baseUrl?: string) {
         super();
         this.baseURL = baseUrl;
-        {{#withCircuitBreaker}}
-        {{#operation}}
-        const {{nickname}}CB = new CircuitBreaker(this.{{nickname}}, circuitBreakerOptions ?? defaultCircuitBreakerOptions)
-        circuitBreakers.set("{{nickname}}CB", {{nickname}}CB);
-        {{/operation}}
-        {{/withCircuitBreaker}}
     }
     paramCreator = {{classname}}FetchParamCreator()
     {{#operation}}
     {{nickname}}({{#allParams}}{{paramName}}{{^required}}?{{/required}}: {{{dataType}}}, {{/allParams}}): Promise<{{#returnType}}{{{returnType}}}{{/returnType}}{{^returnType}}Response{{/returnType}}> {
         const args = this.paramCreator.{{nickname}}({{#allParams}}{{paramName}}, {{/allParams}})
-        // @ts-ignore
         {{#withCircuitBreaker}}
-        const circuitBreaker = circuitBreakers.get("{{nickname}}CB")
-        return circuitBreaker.fire(this.fetch(Object.assign(args.options, { path: args.url })))
+        return serviceCircuitBreaker.execute(() => this.fetch(Object.assign(args.options, { path: args.url })))
         {{/withCircuitBreaker}}
         {{^withCircuitBreaker}}
         return this.fetch(Object.assign(args.options, { path: args.url }))
